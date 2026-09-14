@@ -1,25 +1,29 @@
 import amqp from "amqplib";
 import { clientWelcome, commandStatus, getInput, printClientHelp, printQuit } from "../internal/gamelogic/gamelogic.js";
 import { declareAndBind, SimpleQueueType } from "./pubsub/consume.js";
-import { ExchangePerilDirect, PauseKey } from "../internal/routing/routing.js";
+import { ArmyMovesPrefix, ExchangePerilDirect, ExchangePerilTopic, PauseKey } from "../internal/routing/routing.js";
 import { GameState } from "../internal/gamelogic/gamestate.js";
 import { commandSpawn } from "../internal/gamelogic/spawn.js";
-import { commandMove } from "../internal/gamelogic/move.js";
+import { commandMove, handleMove } from "../internal/gamelogic/move.js";
 import { subscribeJSON } from "../internal/pubsub/consume.js";
-import { handlerPause } from "./handlers.js";
+import { handlerMove, handlerPause } from "./handlers.js";
+import { publishJSON } from "../internal/pubsub/publish.js";
 
 const rabbitConnString = 'amqp://guest:guest@localhost:5672/'
 
 async function main() {
   console.log("Starting Peril client...");
   const conn = await amqp.connect(rabbitConnString);
+  var channel = await conn.createConfirmChannel()
 
   let username = await clientWelcome()
 
-  let res = await declareAndBind(conn, ExchangePerilDirect, `pause.${username}`, PauseKey, SimpleQueueType.Transient)
   let state = new GameState(username)
 
-  let subscribeRes = await subscribeJSON(conn, ExchangePerilDirect, `pause.${username}`, PauseKey, SimpleQueueType.Transient, handlerPause)
+  let subscribePause = await subscribeJSON(conn, ExchangePerilDirect, `pause.${username}`, PauseKey, SimpleQueueType.Transient, handlerPause(state))
+
+  const armyMoveKey = `${ArmyMovesPrefix}.${username}`;
+  let subscribeMove = await subscribeJSON(conn, ExchangePerilTopic, armyMoveKey, ArmyMovesPrefix + '.*', SimpleQueueType.Transient, handlerMove(state))
 
   let keep = true
 
@@ -36,7 +40,8 @@ async function main() {
         break
       case 'move':
         try {
-          commandMove(state, input)
+          let move = commandMove(state, input)
+          publishJSON(channel, ExchangePerilTopic, armyMoveKey, move)
           console.log("Move command received")
         } catch (e) {
           console.error((e as Error).message);

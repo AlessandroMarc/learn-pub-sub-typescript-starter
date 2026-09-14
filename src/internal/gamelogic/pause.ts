@@ -1,7 +1,8 @@
 import type { GameState, PlayingState } from "./gamestate.js";
 
 export function handlePause(gs: GameState, ps: PlayingState): void {
-  console.log();
+  console.log("Pause message received, ps.isPaused =", ps.isPaused);
+
   if (ps.isPaused) {
     console.log("==== Pause Detected ====");
     gs.pauseGame();

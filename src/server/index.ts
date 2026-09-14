@@ -12,14 +12,25 @@ async function main() {
   console.log("Starting Peril server...");
   const conn = await amqp.connect(rabbitConnString);
 
+  ["SIGINT", "SIGTERM"].forEach((signal) =>
+    process.on(signal, async () => {
+      try {
+        await conn.close();
+        console.log("RabbitMQ connection closed.");
+      } catch (err) {
+        console.error("Error closing RabbitMQ connection:", err);
+      } finally {
+        process.exit(0);
+      }
+    }),
+  );
+
   var channel = await conn.createConfirmChannel()
   console.log("Connection's good! You can check dashboard on http://localhost:15672/#/")
 
   let res = await declareAndBind(conn, ExchangePerilTopic, GameLogSlug, "game_logs.*", SimpleQueueType.Durable)
 
   printServerHelp()
-
-  await once(process, "SIGINT");
 
 
   let keep = true
@@ -43,6 +54,8 @@ async function main() {
         console.log("Not clear")
     }
   }
+
+  await once(process, "SIGINT");
 
   console.log("Shutting down Peril server...");
   await conn.close();
