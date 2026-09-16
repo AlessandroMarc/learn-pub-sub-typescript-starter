@@ -1,10 +1,11 @@
 import process from "process";
-import { once } from "events";
 import amqp from "amqplib";
 import { publishJSON } from "../internal/pubsub/publish.js";
 import { ExchangePerilDirect, ExchangePerilTopic, GameLogSlug, PauseKey } from "../internal/routing/routing.js";
 import { getInput, printServerHelp } from "../internal/gamelogic/gamelogic.js";
 import { declareAndBind, SimpleQueueType } from "../client/pubsub/consume.js";
+import { AckType, subscribeMsgPack } from "../internal/pubsub/consume.js";
+import { writeLog, type GameLog } from "../internal/gamelogic/logs.js";
 
 const rabbitConnString = 'amqp://guest:guest@localhost:5672/'
 
@@ -28,7 +29,17 @@ async function main() {
   var channel = await conn.createConfirmChannel()
   console.log("Connection's good! You can check dashboard on http://localhost:15672/#/")
 
-  let res = await declareAndBind(conn, ExchangePerilTopic, GameLogSlug, "game_logs.*", SimpleQueueType.Durable)
+  let res = await subscribeMsgPack(conn, ExchangePerilTopic, GameLogSlug, "game_logs.*", SimpleQueueType.Durable, async (data: GameLog) => {
+    writeLog(data)
+    console.log("> ");
+    return AckType.Ack;
+  })
+
+  // Used to run the server from a non-interactive source, like the multiserver.sh file
+  if (!process.stdin.isTTY) {
+    console.log("Non-interactive mode: skipping command input.");
+    return;
+  }
 
   printServerHelp()
 
@@ -55,11 +66,9 @@ async function main() {
     }
   }
 
-  await once(process, "SIGINT");
-
   console.log("Shutting down Peril server...");
   await conn.close();
-
+  process.exit(0);
 }
 
 main().catch((err) => {

@@ -11,20 +11,20 @@ const writeToDiskSleep = 1000;
 
 function block(ms: number) {
   const end = Date.now() + ms;
-  while (Date.now() < end) {}
+  while (Date.now() < end) { }
 }
 
 export async function writeLog(gameLog: GameLog): Promise<void> {
   console.log("received game log...");
   block(writeToDiskSleep);
 
-  const date = new Date(gameLog.currentTime);
-  const timestamp = date.toISOString();
-  const logEntry = `${timestamp} ${gameLog.username}: ${gameLog.message}\n`;
-
   try {
+
+    const date = new Date(gameLog.currentTime);
+    const timestamp = date.toISOString();
+    const logEntry = `${timestamp} ${gameLog.username}: ${gameLog.message}\n`;
     await appendFile(logsFile, logEntry, { flag: "a" });
   } catch (err) {
-    throw new Error(`could not write to logs file: ${err}`);
+    console.error(`could not write to logs file: ${err}`);
   }
 }

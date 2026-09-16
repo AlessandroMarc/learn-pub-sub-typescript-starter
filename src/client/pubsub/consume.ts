@@ -21,6 +21,9 @@ export async function declareAndBind(
         durable: isDurable,
         autoDelete: isTransient,
         exclusive: isTransient,
+        arguments: {
+            "x-dead-letter-exchange": 'peril_dlx'
+        }
     });
 
     await channel.bindQueue(queue.queue, exchange, key);
